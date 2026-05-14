@@ -43,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
                           ),
                           child: const Center(
                             child: Text(
-                              'AI',
+                              'GK',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 24,
@@ -204,10 +204,10 @@ class SettingsScreen extends StatelessWidget {
                                       ),
                                 ),
                                 const SizedBox(height: 6),
-                                Text(
-                                  'Receive push alerts for ripeness changes and chemical warning signals.',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
+                                // Text(
+                                //   'Receive push alerts for ripeness changes and chemical warning signals.',
+                                //   style: Theme.of(context).textTheme.bodyMedium,
+                                // ),
                               ],
                             ),
                           ),

@@ -6,6 +6,7 @@ class AppCard extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
   final Gradient? gradient;
+  final height;
 
   const AppCard({
     super.key,
@@ -13,6 +14,7 @@ class AppCard extends StatelessWidget {
     this.padding,
     this.onTap,
     this.gradient,
+    this.height,
   });
 
   @override
@@ -22,6 +24,7 @@ class AppCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
+        height: height == null ? null : height,
         padding: padding ?? const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: gradient,
