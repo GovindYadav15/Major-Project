@@ -36,8 +36,8 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
   void _showCalibrationDialog() {
     if (_calibrationDialogShown) return;
     _calibrationDialogShown = true;
-
-    _sensorProvider?.startCalibration();
+    // I want to start the timer when clicked on resume button
+    //_sensorProvider?.startCalibration();
 
     showDialog(
       context: context,
@@ -184,12 +184,18 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
                     const SizedBox(height: 24),
 
                     // AI Prediction Card
-                    _buildPredictionCard(provider),
+                    if (provider.currentPrediction != null)
+                      _buildPredictionCard(provider)
+                    else
+                      _buildNoPredictionCard(),
 
                     const SizedBox(height: 24),
 
                     // Analysis Summary
-                    _buildAnalysisSummary(provider),
+                    if (provider.currentPrediction != null)
+                      _buildAnalysisSummary(provider)
+                    else
+                      _buildNoAnalysisSummary(),
                   ]),
                 ),
               ),
@@ -401,6 +407,78 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
           const SizedBox(height: 12),
           Text(
             prediction.recommendation,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoPredictionCard() {
+    return AppCard(
+      gradient: LinearGradient(
+        colors: [
+          AppColors.primaryBlue.withValues(alpha: 0.1),
+          AppColors.primaryBlue.withValues(alpha: 0.05),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.hourglass_empty,
+                color: AppColors.primaryBlue,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'AI Prediction',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: AppColors.primaryBlue,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Waiting for sensor data...',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'AI analysis will begin once live sensor readings are received from the backend.',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: AppColors.primaryBlue.withValues(alpha: 0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoAnalysisSummary() {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Analysis Summary',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: AppColors.primaryGreen,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No analysis available yet. Please ensure the sensor device is connected and actively sending data. The AI will provide insights on fruit ripening status once sufficient sensor readings are collected.',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
         ],

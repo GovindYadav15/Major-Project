@@ -29,7 +29,7 @@ class FruitSelectionScreen extends StatelessWidget {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 180,
+            expandedHeight: 150,
             pinned: true,
             floating: false,
             stretch: true,

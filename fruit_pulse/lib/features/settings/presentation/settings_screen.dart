@@ -96,7 +96,11 @@ class SettingsScreen extends StatelessWidget {
                         _buildProfileStat(
                           'Status',
                           sensorStatus.toString().split('.').last.toUpperCase(),
-                          AppColors.primaryGreen,
+                          sensorStatus == SensorStatus.live
+                              ? AppColors.primaryGreen
+                              : (sensorStatus == SensorStatus.waiting
+                                    ? AppColors.primaryOrange
+                                    : AppColors.primaryRed),
                         ),
                       ],
                     ),

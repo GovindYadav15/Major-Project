@@ -10,7 +10,7 @@ const { createSensorReading } = require("../services/sensorReading.service");
 const { sensorDataSchema } = require("../validators/sensor.validator");
 
 const receiveSensorData = asyncHandler(async (req, res) => {
-  console.log("📥 Received sensor data:", JSON.stringify(req.body, null, 2));
+  console.log("Received sensor data:", JSON.stringify(req.body, null, 2));
 
   const payloads = Array.isArray(req.body) ? req.body : [req.body];
   const normalizedReadings = [];
@@ -26,7 +26,7 @@ const receiveSensorData = asyncHandler(async (req, res) => {
   }
 
   console.log(
-    "🔄 Normalized sensor readings:",
+    "Normalized sensor readings:",
     JSON.stringify(
       normalizedReadings.map((r) => r.sensorData),
       null,
@@ -34,7 +34,7 @@ const receiveSensorData = asyncHandler(async (req, res) => {
     ),
   );
   console.log(
-    "🤖 Prediction results:",
+    "Prediction results:",
     JSON.stringify(
       normalizedReadings.map((r) => r.prediction),
       null,
