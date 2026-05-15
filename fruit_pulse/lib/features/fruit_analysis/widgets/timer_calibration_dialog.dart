@@ -110,7 +110,7 @@ class TimercalibrationDialog extends StatelessWidget {
                       const SizedBox(height: 12),
                       // Progress bar
                       LinearProgressIndicator(
-                        value: provider.calibrationTimeRemaining / 600,
+                        value: provider.calibrationTimeRemaining / 60,
                         minHeight: 6,
                         backgroundColor: Colors.black12,
                         valueColor: AlwaysStoppedAnimation<Color>(

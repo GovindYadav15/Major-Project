@@ -24,7 +24,7 @@ class AppCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: height == null ? null : height,
+        height: height,
         padding: padding ?? const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: gradient,
