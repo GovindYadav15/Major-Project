@@ -329,7 +329,7 @@ class FruitSelectionScreen extends StatelessWidget {
                       context,
                       '3',
                       'Start Analysis',
-                      'Wait 10 minutes for sensor calibration',
+                      'Begin live sensor readings from the backend',
                     ),
 
                     const SizedBox(height: 12),

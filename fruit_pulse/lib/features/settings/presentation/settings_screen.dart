@@ -210,10 +210,6 @@ class SettingsScreen extends StatelessWidget {
                                       ),
                                 ),
                                 const SizedBox(height: 6),
-                                // Text(
-                                //   'Receive push alerts for ripeness changes and chemical warning signals.',
-                                //   style: Theme.of(context).textTheme.bodyMedium,
-                                // ),
                               ],
                             ),
                           ),
@@ -240,7 +236,7 @@ class SettingsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Auto-sync sensor data every 5 seconds to keep the dashboard fresh.',
+                            'Auto-sync sensor data every 5 seconds to keep the analysis fresh.',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           const SizedBox(height: 16),

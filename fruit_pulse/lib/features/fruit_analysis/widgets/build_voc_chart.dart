@@ -155,8 +155,6 @@ class VocChartWidget extends StatelessWidget {
               _buildLegendItem('Ripe', AppColors.primaryOrange),
               const SizedBox(width: 16),
               _buildLegendItem('Overripe', AppColors.primaryRed),
-              const SizedBox(width: 16),
-              _buildLegendItem('Standard', Colors.grey, isDashed: true),
             ],
           ),
         ],

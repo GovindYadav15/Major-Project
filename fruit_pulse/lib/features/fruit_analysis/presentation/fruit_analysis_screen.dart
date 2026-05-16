@@ -55,8 +55,6 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
     return Scaffold(
       body: Consumer<SensorProvider>(
         builder: (context, provider, child) {
-          // Always show analysis UI; results will appear when sensor data is received
-
           return CustomScrollView(
             slivers: [
               SliverAppBar(
@@ -92,19 +90,12 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
                   delegate: SliverChildListDelegate([
                     VocChartWidget(context: context, provider: provider),
 
-                    // const SizedBox(height: 24),
-                    // BuildChemicalRipeningChart(
-                    //   context: context,
-                    //   provider: provider,
-                    // ),
                     const SizedBox(height: 24),
 
-                    // Sensor Panel
                     _buildSensorPanel(provider),
 
                     const SizedBox(height: 24),
 
-                    // AI Prediction Card
                     if (provider.currentPrediction != null)
                       _buildPredictionCard(provider)
                     else
@@ -112,7 +103,6 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Analysis Summary
                     if (provider.currentPrediction != null)
                       _buildAnalysisSummary(provider)
                     else

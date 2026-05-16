@@ -12,15 +12,18 @@ import '../../core/constants/api_config.dart';
 enum SensorStatus { offline, waiting, live }
 
 class SensorProvider with ChangeNotifier {
-  static const String _sensorHistoryStorageKey = 'sensor_iteration_history_v1';
-  static const String _predictionHistoryStorageKey =
+  static const String _historyStorageKey = 'analysis_session_history_v1';
+  static const String _legacySensorHistoryStorageKey =
+      'sensor_iteration_history_v1';
+  static const String _legacyPredictionHistoryStorageKey =
       'prediction_iteration_history_v1';
-  static const int _maxSessionItems = 60;
+  static const int _maxSessionItems = 100;
   static const int _maxStoredItems = 300;
 
   final LiveSensorService _sensorService = LiveSensorService();
   final Dio _dio = Dio();
   StreamSubscription<LiveSensorReading>? _readingSubscription;
+  Future<void>? _storedHistoryLoadFuture;
   bool _isDisposed = false;
 
   SensorData? _currentSensorData;
@@ -28,7 +31,6 @@ class SensorProvider with ChangeNotifier {
   final List<SensorData> _sensorHistory = [];
   final List<PredictionResult> _predictionHistory = [];
   final List<SensorData> _analysisSensorHistory = [];
-  final List<PredictionResult> _analysisPredictionHistory = [];
 
   SensorData? get currentSensorData => _currentSensorData;
   PredictionResult? get currentPrediction => _currentPrediction;
@@ -45,15 +47,6 @@ class SensorProvider with ChangeNotifier {
   Timer? _statusCheckTimer;
   int _streamSessionId = 0;
   int? _activeHistoryIndex;
-
-  // Calibration timer
-  bool _isCalibrating = false;
-  bool get isCalibrating => _isCalibrating;
-
-  int _calibrationTimeRemaining = 60; // 7 minutes in seconds
-  int get calibrationTimeRemaining => _calibrationTimeRemaining;
-
-  Timer? _calibrationTimer;
 
   // Default sensor data for offline display
   final SensorData _defaultSensorData = SensorData(
@@ -77,12 +70,12 @@ class SensorProvider with ChangeNotifier {
   );
 
   SensorProvider() {
-    unawaited(_loadStoredHistory());
+    _storedHistoryLoadFuture = _loadStoredHistory();
+    unawaited(_storedHistoryLoadFuture);
     _startStatusCheckTimer();
   }
 
   void startSensorStream() {
-    print('Attempting to start sensor stream...');
     if (_isDisposed) return;
 
     if (_isStreaming) {
@@ -96,23 +89,22 @@ class SensorProvider with ChangeNotifier {
     _activeHistoryIndex = null;
     final sessionId = ++_streamSessionId;
     _sensorService.connect();
-    _readingSubscription = _sensorService.readingStream.listen((reading) {
+    _readingSubscription = _sensorService.readingStream.listen((reading) async {
       if (_isDisposed || !_isStreaming || sessionId != _streamSessionId) {
         return;
       }
 
       _currentSensorData = reading.sensorData;
       _analysisSensorHistory.add(reading.sensorData);
-      print('New sensor reading received: ${reading.sensorData}');
-
       if (_analysisSensorHistory.length > _maxSessionItems) {
         _analysisSensorHistory.removeAt(0);
       }
 
       _currentPrediction = reading.prediction;
-      _analysisPredictionHistory.add(reading.prediction);
-      if (_analysisPredictionHistory.length > _maxSessionItems) {
-        _analysisPredictionHistory.removeAt(0);
+
+      await _storedHistoryLoadFuture;
+      if (_isDisposed || !_isStreaming || sessionId != _streamSessionId) {
+        return;
       }
 
       _storeLatestSessionResult(reading);
@@ -138,11 +130,11 @@ class SensorProvider with ChangeNotifier {
 
     _streamSessionId++;
     _isStreaming = false;
-    _sensorStatus = SensorStatus.offline;
     _activeHistoryIndex = null;
     unawaited(_readingSubscription?.cancel());
     _readingSubscription = null;
     _sensorService.disconnect();
+    _updateSensorStatus();
 
     if (notify) {
       _notifyIfActive();
@@ -153,19 +145,9 @@ class SensorProvider with ChangeNotifier {
     _currentSensorData = null;
     _currentPrediction = null;
     _analysisSensorHistory.clear();
-    _analysisPredictionHistory.clear();
     _activeHistoryIndex = null;
-    _lastDataReceived = null;
-    _calibrationTimer?.cancel();
-    _calibrationTimer = null;
-    _isCalibrating = false;
-    _calibrationTimeRemaining = 60;
 
-    if (!_isStreaming) {
-      _sensorStatus = SensorStatus.offline;
-    } else {
-      _sensorStatus = SensorStatus.waiting;
-    }
+    _updateSensorStatus();
 
     if (notify) {
       _notifyIfActive();
@@ -201,8 +183,12 @@ class SensorProvider with ChangeNotifier {
 
   void _startStatusCheckTimer() {
     _statusCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final previousStatus = _sensorStatus;
       await _checkBackendSensorStatus();
       _updateSensorStatus();
+      if (previousStatus != _sensorStatus) {
+        _notifyIfActive();
+      }
     });
   }
 
@@ -223,20 +209,26 @@ class SensorProvider with ChangeNotifier {
         switch (status) {
           case 'live':
             _sensorStatus = SensorStatus.live;
+            if (data['data']['lastSeen'] != null) {
+              _lastDataReceived = DateTime.parse(
+                data['data']['lastSeen'] as String,
+              );
+            } else {
+              _lastDataReceived = DateTime.now();
+            }
             break;
           case 'waiting':
-            _sensorStatus = SensorStatus.waiting;
+            if (!_hasRecentData()) {
+              _sensorStatus = SensorStatus.waiting;
+              _lastDataReceived = null;
+            }
             break;
           case 'offline':
-            _sensorStatus = SensorStatus.offline;
+            if (!_hasRecentData()) {
+              _sensorStatus = SensorStatus.offline;
+              _lastDataReceived = null;
+            }
             break;
-        }
-
-        // If backend says live, update last received time
-        if (status == 'live' && data['data']['lastSeen'] != null) {
-          _lastDataReceived = DateTime.parse(
-            data['data']['lastSeen'] as String,
-          );
         }
       }
     } catch (e) {
@@ -246,22 +238,25 @@ class SensorProvider with ChangeNotifier {
   }
 
   void _updateSensorStatus() {
-    if (!_isStreaming) {
-      _sensorStatus = SensorStatus.offline;
-      return;
-    }
-
-    if (_lastDataReceived == null) {
-      _sensorStatus = SensorStatus.waiting;
-      return;
-    }
-
-    final timeSinceLastData = DateTime.now().difference(_lastDataReceived!);
-    if (timeSinceLastData.inSeconds > 10) {
-      _sensorStatus = SensorStatus.offline;
-    } else {
+    if (_hasRecentData()) {
       _sensorStatus = SensorStatus.live;
+      return;
     }
+
+    if (_lastDataReceived != null) {
+      _sensorStatus = SensorStatus.offline;
+      return;
+    }
+
+    _sensorStatus = _isStreaming ? SensorStatus.waiting : _sensorStatus;
+  }
+
+  bool _hasRecentData() {
+    final lastDataReceived = _lastDataReceived;
+    if (lastDataReceived == null) return false;
+
+    final timeSinceLastData = DateTime.now().difference(lastDataReceived);
+    return timeSinceLastData.inSeconds <= 10;
   }
 
   // Get current sensor data, returning default if offline
@@ -280,41 +275,31 @@ class SensorProvider with ChangeNotifier {
     return const [];
   }
 
-  List<PredictionResult> getPredictionHistory() {
-    if (_analysisPredictionHistory.isNotEmpty) {
-      return _analysisPredictionHistory;
-    }
-    return const [];
-  }
-
   Future<void> _loadStoredHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final sensorJson = prefs.getString(_sensorHistoryStorageKey);
-      final predictionJson = prefs.getString(_predictionHistoryStorageKey);
+      final historyJson = prefs.getString(_historyStorageKey);
 
-      if (sensorJson != null) {
-        final decoded = jsonDecode(sensorJson) as List<dynamic>;
-        _sensorHistory
-          ..clear()
-          ..addAll(
-            decoded
-                .whereType<Map>()
-                .map((item) => SensorData.fromJson(_jsonMap(item)))
-                .take(_maxStoredItems),
-          );
-      }
+      if (historyJson != null) {
+        final decoded = jsonDecode(historyJson) as List<dynamic>;
+        _sensorHistory.clear();
+        _predictionHistory.clear();
 
-      if (predictionJson != null) {
-        final decoded = jsonDecode(predictionJson) as List<dynamic>;
-        _predictionHistory
-          ..clear()
-          ..addAll(
-            decoded
-                .whereType<Map>()
-                .map((item) => PredictionResult.fromJson(_jsonMap(item)))
-                .take(_maxStoredItems),
-          );
+        for (final item in decoded.whereType<Map>().take(_maxStoredItems)) {
+          final entry = _jsonMap(item);
+          final sensor = entry['sensor'];
+          final prediction = entry['prediction'];
+
+          if (sensor is Map && prediction is Map) {
+            _sensorHistory.add(SensorData.fromJson(_jsonMap(sensor)));
+            _predictionHistory.add(
+              PredictionResult.fromJson(_jsonMap(prediction)),
+            );
+          }
+        }
+      } else {
+        _loadLegacyStoredHistory(prefs);
+        await _saveStoredHistory();
       }
 
       _notifyIfActive();
@@ -327,85 +312,54 @@ class SensorProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-        _sensorHistoryStorageKey,
-        jsonEncode(_sensorHistory.map((item) => item.toJson()).toList()),
-      );
-      await prefs.setString(
-        _predictionHistoryStorageKey,
-        jsonEncode(_predictionHistory.map((item) => item.toJson()).toList()),
+        _historyStorageKey,
+        jsonEncode(
+          List.generate(_sensorHistory.length, (index) {
+            return {
+              'sensor': _sensorHistory[index].toJson(),
+              'prediction': index < _predictionHistory.length
+                  ? _predictionHistory[index].toJson()
+                  : _defaultPrediction.toJson(),
+            };
+          }),
+        ),
       );
     } catch (_) {
       // Persistence should not interrupt live plotting.
     }
   }
 
-  Map<String, dynamic> _jsonMap(Map item) {
-    return item.map((key, value) => MapEntry(key.toString(), value));
-  }
+  void _loadLegacyStoredHistory(SharedPreferences prefs) {
+    final sensorJson = prefs.getString(_legacySensorHistoryStorageKey);
+    final predictionJson = prefs.getString(_legacyPredictionHistoryStorageKey);
 
-  // Calibration timer methods
-  void startCalibration() {
-    if (_isCalibrating) return;
-
-    _isCalibrating = true;
-    _calibrationTimeRemaining = 60; // Reset to 10 minutes
-    _notifyIfActive();
-
-    _calibrationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_calibrationTimeRemaining > 0) {
-        _calibrationTimeRemaining--;
-        _notifyIfActive();
-      } else {
-        // Timer finished - start sensor stream
-        completeCalibration();
-      }
-    });
-  }
-
-  void pauseCalibration() {
-    if (!_isCalibrating) return;
-    _isCalibrating = false;
-    _calibrationTimer?.cancel();
-    _calibrationTimer = null;
-    _notifyIfActive();
-  }
-
-  void resumeCalibration() {
-    _isCalibrating = true;
-    if (!_isCalibrating || _calibrationTimer != null) return;
-
-    _calibrationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_calibrationTimeRemaining > 0) {
-        _calibrationTimeRemaining--;
-        _notifyIfActive();
-      } else {
-        // Timer finished - start sensor stream
-        completeCalibration();
-      }
-    });
-    _notifyIfActive();
-  }
-
-  void completeCalibration() {
-    _calibrationTimer?.cancel();
-    _calibrationTimer = null;
-    _isCalibrating = false;
-    _calibrationTimeRemaining = 0;
-
-    // Start sensor stream after calibration
-    if (!_isStreaming) {
-      startSensorStream();
+    if (sensorJson != null) {
+      final decoded = jsonDecode(sensorJson) as List<dynamic>;
+      _sensorHistory
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map((item) => SensorData.fromJson(_jsonMap(item)))
+              .take(_maxStoredItems),
+        );
     }
 
-    _notifyIfActive();
+    if (predictionJson != null) {
+      final decoded = jsonDecode(predictionJson) as List<dynamic>;
+      _predictionHistory
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map>()
+              .map((item) => PredictionResult.fromJson(_jsonMap(item)))
+              .take(_maxStoredItems),
+        );
+    }
   }
 
-  void cancelCalibration() {
-    _calibrationTimer?.cancel();
-    _calibrationTimer = null;
-    _isCalibrating = false;
-    _calibrationTimeRemaining = 60;
-    _notifyIfActive();
+  Map<String, dynamic> _jsonMap(Map item) {
+    return item.map((key, value) => MapEntry(key.toString(), value));
   }
 
   void _notifyIfActive() {
@@ -418,7 +372,6 @@ class SensorProvider with ChangeNotifier {
   void dispose() {
     _isDisposed = true;
     _statusCheckTimer?.cancel();
-    _calibrationTimer?.cancel();
     unawaited(_readingSubscription?.cancel());
     _readingSubscription = null;
     _sensorService.dispose();

@@ -51,7 +51,6 @@ class LiveSensorService {
 
   void _handleMessage(dynamic message) {
     final decoded = jsonDecode(message as String) as Map<String, dynamic>;
-    print('WebSocket message received: $decoded');
 
     if (decoded['event'] != 'sensor:reading') return;
 
