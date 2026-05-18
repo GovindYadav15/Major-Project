@@ -51,14 +51,18 @@ const buildRecommendation = ({ ripeness, chemicalUsed }) => {
   }
 
   if (status === "ripe") {
-    return `Fruit is ${method} ripened and currently ripe. Recommended for consumption within 2 days.`;
+    return method === "chemically"
+      ? `Fruit is ${method} ripened and currently ripe, But it is harmful for consumption. Discard immediately.`
+      : `Fruit is ${method} ripened and currently ripe. Recommended for consumption within 2 days.`;
   }
 
   if (status === "overripe") {
-    return `Fruit is ${method} ripened and currently overripe. Consume immediately or discard.`;
+    return method == "chemically"
+      ? `Fruit is ${method} ripened and currently overripe. Discard immediately.`
+      : `Fruit is ${method} ripened and currently overripe. Consume immediately or discard.`;
   }
 
-  return `Fruit is ${method} ripened and currently ${status}. Review before consumption.`;
+  return `Fruit is currently in spoiled condition. Discard immediately.`;
 };
 
 const predictFromSensorData = async (sensorData) => {
