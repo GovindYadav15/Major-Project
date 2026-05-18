@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fruit_pulse/features/fruit_analysis/widgets/build_chemical_ripening_chart.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:fruit_pulse/features/fruit_analysis/widgets/build_voc_chart.dart';
-import 'package:fruit_pulse/features/fruit_analysis/widgets/timer_calibration_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../shared/models/sensor_data.dart';
 import '../../../shared/providers/sensor_provider.dart';
 import '../../../shared/widgets/sensor_card.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -21,43 +21,33 @@ class FruitAnalysisScreen extends StatefulWidget {
 
 class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
   SensorProvider? _sensorProvider;
-  bool _calibrationDialogShown = false;
 
   @override
   void initState() {
     super.initState();
-    // Show calibration dialog when entering analysis
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _showCalibrationDialog();
-    });
-  }
-
-  void _showCalibrationDialog() {
-    if (_calibrationDialogShown) return;
-    _calibrationDialogShown = true;
-    // I want to start the timer when clicked on resume button so removed this function call
-    //_sensorProvider?.startCalibration();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => TimercalibrationDialog(mounted: mounted),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
     _sensorProvider = context.read<SensorProvider>();
+    _sensorProvider?.restartAnalysisStream();
   }
 
   @override
   void dispose() {
-    // Stop sensor stream when leaving
-    _sensorProvider?.stopSensorStream(notify: false);
-    _sensorProvider?.cancelCalibration();
+    _clearAnalysisSession(notify: false);
     super.dispose();
+  }
+
+  void _clearAnalysisSession({bool notify = true}) {
+    _sensorProvider?.stopSensorStream(notify: false);
+    _sensorProvider?.resetAnalysisData(notify: notify);
+  }
+
+  void _handleBackPressed(SensorProvider provider) {
+    _clearAnalysisSession();
+
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/fruit-selection');
+    }
   }
 
   @override
@@ -65,82 +55,11 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
     return Scaffold(
       body: Consumer<SensorProvider>(
         builder: (context, provider, child) {
-          // Show loading state during calibration
-          if (provider.isCalibrating) {
-            return CustomScrollView(
-              slivers: [
-                SliverAppBar(
-                  leading: BackButton(
-                    onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/fruit-selection');
-                      }
-                    },
-                  ),
-                  title: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      Text(AppStrings.analysisTitle),
-                      Text(
-                        _getStatusText(
-                          context.watch<SensorProvider>().sensorStatus,
-                        ),
-                        style: TextStyle(
-                          color: _getStatusColor(
-                            context.watch<SensorProvider>().sensorStatus,
-                          ),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  backgroundColor: const Color.fromARGB(255, 45, 91, 47),
-                  elevation: 0,
-                  floating: true,
-                  snap: true,
-                ),
-                SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        SizedBox(
-                          width: 60,
-                          height: 60,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 4,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Color.fromARGB(255, 6, 219, 13),
-                            ),
-                          ),
-                        ),
-                        SizedBox(height: 24),
-                        Text(
-                          'Calibrating sensor...',
-                          style: TextStyle(fontSize: 16, color: Colors.black54),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
-          }
-
           return CustomScrollView(
             slivers: [
               SliverAppBar(
                 leading: BackButton(
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/fruit-selection');
-                    }
-                  },
+                  onPressed: () => _handleBackPressed(provider),
                 ),
                 title: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -170,20 +89,13 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     VocChartWidget(context: context, provider: provider),
-                    const SizedBox(height: 24),
-                    BuildChemicalRipeningChart(
-                      context: context,
-                      provider: provider,
-                    ),
 
                     const SizedBox(height: 24),
 
-                    // Sensor Panel
                     _buildSensorPanel(provider),
 
                     const SizedBox(height: 24),
 
-                    // AI Prediction Card
                     if (provider.currentPrediction != null)
                       _buildPredictionCard(provider)
                     else
@@ -191,7 +103,6 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Analysis Summary
                     if (provider.currentPrediction != null)
                       _buildAnalysisSummary(provider)
                     else
@@ -208,6 +119,7 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
 
   Widget _buildSensorPanel(SensorProvider provider) {
     final data = provider.getCurrentSensorData();
+    final history = provider.getSensorHistory();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -234,7 +146,7 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
               unit: '%',
               icon: Icons.water_drop,
               color: AppColors.primaryBlue,
-              sparklineData: [], // TODO: Add sparkline data
+              sparklineData: _sparklineSpots(history, (item) => item.humidity),
             ),
             SensorCard(
               title: AppStrings.temperature,
@@ -242,15 +154,21 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
               unit: '°C',
               icon: Icons.thermostat,
               color: AppColors.primaryOrange,
-              sparklineData: [], // TODO: Add sparkline data
+              sparklineData: _sparklineSpots(
+                history,
+                (item) => item.temperature,
+              ),
             ),
             SensorCard(
               title: AppStrings.voc,
-              value: data.voc.toStringAsFixed(1),
-              unit: '',
+              value: data.gasResistance.toStringAsFixed(2),
+              unit: 'Kohm',
               icon: Icons.air,
-              color: _getVocColor(data.voc),
-              sparklineData: [], // TODO: Add sparkline data
+              color: _getVocColor(data.gasResistance),
+              sparklineData: _sparklineSpots(
+                history,
+                (item) => item.gasResistance,
+              ),
             ),
           ],
         ),
@@ -258,9 +176,26 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
     );
   }
 
+  List<FlSpot> _sparklineSpots(
+    List<SensorData> history,
+    double Function(SensorData item) valueForItem,
+  ) {
+    if (history.isEmpty) return const [FlSpot(0, 0), FlSpot(2, 0)];
+
+    final spots = history.asMap().entries.map((entry) {
+      return FlSpot(entry.key * 2.0, valueForItem(entry.value));
+    }).toList();
+
+    if (spots.length == 1) {
+      spots.add(FlSpot(2, spots.first.y));
+    }
+
+    return spots;
+  }
+
   Color _getVocColor(double voc) {
-    if (voc > 60) return AppColors.primaryGreen;
-    if (voc > 30) return AppColors.primaryOrange;
+    if (voc > 45) return AppColors.primaryGreen;
+    if (voc > 35) return AppColors.primaryOrange;
     return AppColors.primaryRed;
   }
 
@@ -363,9 +298,11 @@ class _FruitAnalysisScreenState extends State<FruitAnalysisScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            prediction.isNaturalRipening
-                ? AppStrings.naturalRipening
-                : AppStrings.chemicalRipening,
+            prediction.status == 'unripe'
+                ? 'Unripe'
+                : prediction.isNaturalRipening
+                ? 'Naturally Ripened'
+                : 'Chemically Ripened',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w600,

@@ -1,10 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import '../../shared/widgets/main_scaffold.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/fruit_selection/presentation/fruit_selection_screen.dart';
 import '../../features/fruit_analysis/presentation/fruit_analysis_screen.dart';
-import '../../features/analytics/presentation/news_and_history_screen.dart';
-import '../../features/analytics/presentation/news_detail_screen.dart';
+import '../../features/history_and_news/presentation/news_and_history_screen.dart';
+import '../../features/history_and_news/widgets/news_detail_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 
 class AppRouter {
@@ -22,7 +23,10 @@ class AppRouter {
             path: '/analysis',
             builder: (context, state) {
               final fruitId = state.uri.queryParameters['fruitId'] ?? '';
-              return FruitAnalysisScreen(fruitId: fruitId);
+              return FruitAnalysisScreen(
+                key: ValueKey(state.uri.toString()),
+                fruitId: fruitId,
+              );
             },
           ),
           GoRoute(
