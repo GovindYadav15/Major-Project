@@ -66,7 +66,7 @@ const buildRecommendation = ({ ripeness, chemicalUsed }) => {
 };
 
 const predictFromSensorData = async (sensorData) => {
-  const result = await runPythonPrediction({
+  const predictionFeatures = {
     Red: sensorData.r ?? 0,
     Green: sensorData.g ?? 0,
     Blue: sensorData.b ?? 0,
@@ -77,7 +77,16 @@ const predictFromSensorData = async (sensorData) => {
       sensorData.gasResistance ?? sensorData["Gas resistance in (Kohm)"] ?? 0,
     Difference: sensorData.difference ?? 0,
     "VOC%": sensorData.vocPercent ?? sensorData.VOC_percent ?? 0,
-  });
+  };
+
+  console.log(
+    "Data sent to ML prediction:",
+    JSON.stringify(predictionFeatures, null, 2),
+  );
+
+  const result = await runPythonPrediction(predictionFeatures);
+
+  console.log("Raw ML prediction:", JSON.stringify(result, null, 2));
 
   return {
     isNaturalRipening: String(result.chemicalUsed).toUpperCase() !== "YES",
